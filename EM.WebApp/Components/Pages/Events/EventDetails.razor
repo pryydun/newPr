@@ -1,0 +1,194 @@
+﻿@page "/event-details/{Id:int}"
+@using EM_UseCases
+@inject IViewEventByIdUseCase ViewEventByIdUseCase
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUserEventService UserEventService
+
+<h3>Event Details</h3>
+
+@if (Event == null)
+
+{
+    <p>Loading...</p>
+}
+
+else
+
+{
+    <div class="card">
+        <div class="card-body">
+            <h4 class="card-title">@Event.Title</h4>
+            <p class="card-text"><strong>Description:</strong> @Event.Description</p>
+            <p class="card-text"><strong>Start Date:</strong> @Event.StartDate.ToString("f")</p>
+            <p class="card-text"><strong>End Date:</strong> @Event.EndDate.ToString("f")</p>
+            <p class="card-text"><strong>Location:</strong> @Event.Location</p>
+
+            <EditForm Model="this" FormName ="Join" OnValidSubmit="HandleJoinOrLeaveEvent">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                @if (IsUserRegistered)
+
+                {
+                    <button class="btn btn-danger" type="submit">Leave Event</button>
+                }
+
+                else
+
+                {
+                    <button class="btn btn-primary" type="submit">Join Event</button>
+                }
+            </EditForm>
+
+            <h5 class="mt-4">Registered Users</h5>
+            @if (RegisteredUsers != null && RegisteredUsers.Any())
+
+            {
+                <ul>
+                    @foreach (var user in RegisteredUsers)
+
+                    {
+                        <li>@user</li>
+                    }
+                </ul>
+            }
+
+            else
+
+            {
+                <p>No users registered yet.</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+
+    public int Id { get; set; }
+
+
+
+    private Event? Event { get; set; }
+
+    private bool IsUserRegistered { get; set; } = false;
+
+    private List<string> RegisteredUsers { get; set; } = new();
+
+
+
+    protected override async Task OnInitializedAsync()
+
+    {
+
+        Event = await ViewEventByIdUseCase.ExecuteAsync(Id);
+
+
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var user = authState.User;
+
+
+
+        if (user.Identity != null && user.Identity.IsAuthenticated)
+
+        {
+
+
+
+            var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+
+
+            var userName = user.Identity.Name;
+
+            if (!string.IsNullOrEmpty(userId))
+
+            {
+
+                IsUserRegistered = await UserEventService.IsUserRegisteredAsync(userId, Id);
+
+            }
+
+        }
+
+
+
+        RegisteredUsers = await UserEventService.GetRegisteredUsersAsync(Id);
+
+    }
+
+
+
+    private async Task HandleJoinOrLeaveEvent()
+
+    {
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var user = authState.User;
+
+
+
+        if (user.Identity != null && user.Identity.IsAuthenticated)
+
+        {
+
+
+
+       var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+
+
+            var userName = user.Identity.Name;
+
+
+
+            if (!string.IsNullOrEmpty(userId))
+
+            {
+
+                if (IsUserRegistered)
+
+                {
+
+
+
+                    await UserEventService.UnregisterUserFromEventAsync(userId, Id, userName);
+
+
+
+                    IsUserRegistered = false;
+
+                }
+
+                else
+
+                {
+
+                    await UserEventService.RegisterUserForEventAsync(userId, Id, userName ?? "");
+
+                    IsUserRegistered = true;
+
+                }
+
+
+
+                RegisteredUsers = await UserEventService.GetRegisteredUsersAsync(Id);
+
+            }
+
+        }
+
+        else
+
+        {
+
+            NavigationManager.NavigateTo("/login");
+
+        }
+
+    }
+}
